@@ -20,7 +20,7 @@ bot = Bot(token=TOKEN)
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 
-# 🌐 Расширенный список направлений (~20 популярных городов РФ, юг, север, СНГ)
+# Список направлений
 STATIONS = {
     "Москва": "2000000",
     "Санкт-Петербург": "2004000",
@@ -43,7 +43,6 @@ STATIONS = {
     "Севастополь": "2210570",
 }
 
-# База активных задач пользователей: {user_id: [list of tasks]}
 USER_TASKS = {}
 
 class TrackState(StatesGroup):
@@ -53,10 +52,6 @@ class TrackState(StatesGroup):
     waiting_for_seat_type = State()
     waiting_for_price = State()
 
-
-# =========================================================================
-# КНОПКИ ГЛАВНОГО МЕНЮ
-# =========================================================================
 def get_main_keyboard():
     builder = InlineKeyboardBuilder()
     builder.button(text="🔍 Найти/Отслеживать билет", callback_data="new_search")
@@ -66,10 +61,8 @@ def get_main_keyboard():
     builder.adjust(1)
     return builder.as_markup()
 
-
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
-    """Приветственное сообщение при запуске бота."""
     text = (
         f"🚂 <b>Привет, {message.from_user.first_name}!</b>\n\n"
         "Я твой бесплатный личный бот-охотник за билетами РЖД.\n"
@@ -79,26 +72,21 @@ async def cmd_start(message: types.Message):
     )
     await message.answer(text, reply_markup=get_main_keyboard(), parse_mode="HTML")
 
-
 @dp.callback_query(F.data == "help")
 async def process_help(callback: types.CallbackQuery):
     await callback.message.edit_text(
         "ℹ️ <b>Как пользоваться ботом:</b>\n\n"
         "1. Нажми «🔍 Найти/Отслеживать билет».\n"
-        "2. Выбери станцию отправления и прибытия из расширенного списка (~20 городов).\n"
+        "2. Выбери станцию отправления и прибытия.\n"
         "3. Введи дату в формате ГГГГ-ММ-ДД (например, 2026-12-31).\n"
         "4. Выбери тип вагона (Плацкарт, Купе, СВ, Люкс, Сидячий или Любой).\n"
         "5. Укажи максимальную цену, которую готов заплатить.\n\n"
-        "Также ты можешь выгрузить актуальное расписание поездов и **скачать его в TXT файле** без ошибок кодировки!",
+        "Также ты можешь выгрузить актуальное расписание поездов и скачать его в TXT файле!",
         reply_markup=get_main_keyboard(),
         parse_mode="HTML"
     )
     await callback.answer()
 
-
-# =========================================================================
-# ЦЕПОЧКА ПОИСКА И ОТСЛЕЖИВАНИЯ БИЛЕТОВ
-# =========================================================================
 @dp.callback_query(F.data == "new_search")
 async def start_search(callback: types.CallbackQuery, state: FSMContext):
     builder = InlineKeyboardBuilder()
@@ -113,7 +101,6 @@ async def start_search(callback: types.CallbackQuery, state: FSMContext):
     )
     await state.set_state(TrackState.waiting_for_origin)
     await callback.answer()
-
 
 @dp.callback_query(TrackState.waiting_for_origin, F.data.startswith("orig_"))
 async def process_origin(callback: types.CallbackQuery, state: FSMContext):
@@ -134,7 +121,6 @@ async def process_origin(callback: types.CallbackQuery, state: FSMContext):
     await state.set_state(TrackState.waiting_for_destination)
     await callback.answer()
 
-
 @dp.callback_query(TrackState.waiting_for_destination, F.data.startswith("dest_"))
 async def process_destination(callback: types.CallbackQuery, state: FSMContext):
     dest = callback.data.split("_")[1]
@@ -150,7 +136,6 @@ async def process_destination(callback: types.CallbackQuery, state: FSMContext):
     await state.set_state(TrackState.waiting_for_date)
     await callback.answer()
 
-
 @dp.message(TrackState.waiting_for_date)
 async def process_date(message: types.Message, state: FSMContext):
     date_str = message.text.strip()
@@ -162,7 +147,6 @@ async def process_date(message: types.Message, state: FSMContext):
 
     await state.update_data(date_str=date_str)
     
-    # Предлагаем выбрать тип вагона
     builder = InlineKeyboardBuilder()
     seats = ["Плацкарт", "Купе", "Сидячий", "СВ", "Люкс", "Любой"]
     for s in seats:
@@ -176,7 +160,6 @@ async def process_date(message: types.Message, state: FSMContext):
     )
     await state.set_state(TrackState.waiting_for_seat_type)
 
-
 @dp.callback_query(TrackState.waiting_for_seat_type, F.data.startswith("seat_"))
 async def process_seat_type(callback: types.CallbackQuery, state: FSMContext):
     seat_type = callback.data.split("_", 1)[1]
@@ -189,7 +172,6 @@ async def process_seat_type(callback: types.CallbackQuery, state: FSMContext):
     )
     await state.set_state(TrackState.waiting_for_price)
     await callback.answer()
-
 
 @dp.message(TrackState.waiting_for_price)
 async def process_price(message: types.Message, state: FSMContext):
@@ -227,14 +209,9 @@ async def process_price(message: types.Message, state: FSMContext):
         parse_mode="HTML"
     )
 
-
-# =========================================================================
-# СКАЧИВАНИЕ РАСПИСАНИЯ В TXT ФАЙЛЕ
-# =========================================================================
 class ScheduleState(StatesGroup):
     waiting_for_origin = State()
     waiting_for_destination = State()
-
 
 @dp.callback_query(F.data == "get_schedule_menu")
 async def start_schedule_flow(callback: types.CallbackQuery, state: FSMContext):
@@ -250,7 +227,6 @@ async def start_schedule_flow(callback: types.CallbackQuery, state: FSMContext):
     )
     await state.set_state(ScheduleState.waiting_for_origin)
     await callback.answer()
-
 
 @dp.callback_query(ScheduleState.waiting_for_origin, F.data.startswith("sch_orig_"))
 async def process_schedule_origin(callback: types.CallbackQuery, state: FSMContext):
@@ -270,7 +246,6 @@ async def process_schedule_origin(callback: types.CallbackQuery, state: FSMConte
     )
     await state.set_state(ScheduleState.waiting_for_destination)
     await callback.answer()
-
 
 @dp.callback_query(ScheduleState.waiting_for_destination, F.data.startswith("sch_dest_"))
 async def process_schedule_destination(callback: types.CallbackQuery, state: FSMContext):
@@ -316,7 +291,6 @@ async def process_schedule_destination(callback: types.CallbackQuery, state: FSM
 Сгенерировано ботом RZD Hunter Bot © 2026
 =================================================="""
 
-    # Кодировка UTF-8 с BOM для идеального чтения на любых устройствах
     file_bytes = schedule_content.encode("utf-8-sig")
     document = BufferedInputFile(file_bytes, filename=f"Schedule_{origin}_{dest}.txt")
 
@@ -331,10 +305,6 @@ async def process_schedule_destination(callback: types.CallbackQuery, state: FSM
     except Exception:
         pass
 
-
-# =========================================================================
-# УПРАВЛЕНИЕ АКТИВНЫМИ ЗАДАЧАМИ
-# =========================================================================
 @dp.callback_query(F.data == "my_tasks")
 async def show_my_tasks(callback: types.CallbackQuery):
     user_id = callback.from_user.id
@@ -360,7 +330,6 @@ async def show_my_tasks(callback: types.CallbackQuery):
     await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
     await callback.answer()
 
-
 @dp.callback_query(F.data.startswith("del_task_"))
 async def delete_task_handler(callback: types.CallbackQuery):
     task_id = callback.data.split("_")[2]
@@ -372,25 +341,17 @@ async def delete_task_handler(callback: types.CallbackQuery):
     await callback.answer("Радар удален!")
     await show_my_tasks(callback)
 
-
 @dp.callback_query(F.data == "back_to_menu")
 async def back_menu(callback: types.CallbackQuery):
     await callback.message.edit_text("Главное меню:", reply_markup=get_main_keyboard())
     await callback.answer()
 
-
-# =========================================================================
-# ФОНОВЫЙ МОНИТОРИНГ БИЛЕТОВ (24/7)
-# =========================================================================
 async def background_ticket_checker():
-    """Фоновая задача, циклически проверяющая билеты для всех пользователей."""
     while True:
         await asyncio.sleep(15)
         for user_id, tasks in list(USER_TASKS.items()):
             for task in list(tasks):
                 task["checks"] += 1
-                
-                # Симуляция поиска: на 2-й и более проверке симулируем появление билета
                 if task["checks"] >= 2 and random.random() < 0.35:
                     simulated_train = random.choice(["002А «Красная стрела»", "754А «Сапсан»", "104В «Двухэтажный»"])
                     simulated_price = random.randint(int(task["max_price"] * 0.7), task["max_price"])
@@ -410,14 +371,12 @@ async def background_ticket_checker():
                         await bot.send_message(user_id, msg, parse_mode="HTML")
                         USER_TASKS[user_id].remove(task)
                     except Exception as e:
-                        logging.error(f"Не удалось отправить уведомление пользователю {user_id}: {e}")
-
+                        logging.error(f"Ошибка отправки: {e}")
 
 async def main():
     asyncio.create_task(background_ticket_checker())
     logging.info("Бот запущен и ожидает сообщения...")
     await dp.start_polling(bot)
-
 
 if __name__ == "__main__":
     asyncio.run(main())
